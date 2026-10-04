@@ -1,0 +1,74 @@
+services:
+  # 1. NGINX Reverse Proxy (The ONLY service directly open to internet on Port 80)
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - dockerproject1
+      - dockerproject2
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # 2. PostgreSQL Database
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. Spring Boot Service 1 (Data & DB Service)
+  dockerproject1:
+    build:
+      context: ./dockerproject1
+      dockerfile: Dockerfile
+    container_name: dockerproject1-container
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/mydb
+      DB_USER: myuser
+      DB_PASSWORD: mypassword123
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # 4. Spring Boot Service 2 (Microservice calling Service 1)
+  dockerproject2:
+    build:
+      context: ./dockerproject2
+      dockerfile: Dockerfile
+    container_name: dockerproject2-container
+    environment:
+      PROJECT1_URL: http://dockerproject1-container:8081
+    depends_on:
+      - dockerproject1
+    networks:
+      - app-network
+    restart: unless-stopped
+
+# Named persistent volume for database data
+volumes:
+  postgres_data:
+
+# Internal network for container communication
+networks:
+  app-network:
+    driver: bridge
