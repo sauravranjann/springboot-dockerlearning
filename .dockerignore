@@ -1,0 +1,9 @@
+build/classes
+build/resources
+build/tmp
+.gradle
+.git
+.gitignore
+gradle
+gradlew
+gradlew.bat
